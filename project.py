@@ -1,58 +1,86 @@
 import streamlit as st
 import PyPDF2
+import speech_recognition as sr
+from gtts import gTTS
+import os
+import spacy
+from io import BytesIO
 
-# Title and intro
-st.set_page_config(page_title="Voice Revision Web App (Demo)", layout="centered")
-st.title("📘 Voice Revision Web App (Demo)")
-st.write("Upload a **PDF** of your notes, type your **question** and **your answer**, and receive keyword feedback!")
+nlp = spacy.load("en_core_web_sm")
+
+st.set_page_config(page_title="Smart PDF QA", layout="centered")
+st.title("🎙️ Voice-Enabled PDF Question Answer Checker")
 
 # PDF Upload
 pdf_file = st.file_uploader("📤 Upload your Notes PDF", type=['pdf'])
 
-if pdf_file is not None:
-    try:
-        reader = PyPDF2.PdfReader(pdf_file)
-        text = ""
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text
+def text_to_speech(text):
+    tts = gTTS(text)
+    tts.save("feedback.mp3")
+    audio_file = open("feedback.mp3", "rb")
+    st.audio(audio_file.read(), format='audio/mp3')
 
-        st.success("✅ PDF Loaded Successfully!")
+def voice_input(label):
+    st.write(f"🎙️ {label}")
+    if st.button(f"Start Recording for {label}"):
+        recognizer = sr.Recognizer()
+        with sr.Microphone() as source:
+            st.info("Listening...")
+            audio = recognizer.listen(source)
+        try:
+            text = recognizer.recognize_google(audio)
+            st.success("Captured: " + text)
+            return text
+        except sr.UnknownValueError:
+            st.error("Could not understand audio.")
+        except sr.RequestError:
+            st.error("Could not request results.")
+    return ""
 
-        # User Question
-        question_input = st.text_input("❓ Type your Question here:")
+if pdf_file:
+    reader = PyPDF2.PdfReader(pdf_file)
+    pdf_text = ""
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            pdf_text += page_text
+    st.success("✅ PDF Loaded Successfully!")
 
-        # User Answer
-        answer_input = st.text_input("📝 Type your Answer here:")
+    option = st.radio("Choose input mode:", ("Type", "Voice"))
 
-        if st.button("Check My Answer"):
-            paragraphs = text.split('\n')
-            best_match = ""
-            max_matches = 0
-            question_words = question_input.lower().split()
+    if option == "Type":
+        question_input = st.text_input("❓ Type your Question:")
+        answer_input = st.text_input("📝 Type your Answer:")
+    else:
+        question_input = voice_input("Question")
+        answer_input = voice_input("Answer")
 
-            for para in paragraphs:
-                matches = sum(1 for word in question_words if word in para.lower())
-                if matches > max_matches:
-                    max_matches = matches
-                    best_match = para
+    if st.button("Check My Answer"):
+        paragraphs = pdf_text.split('\n')
+        best_para = ""
+        best_score = 0
+        question_doc = nlp(question_input.lower())
 
-            if best_match.strip():
-                st.markdown("### 🔍 Closest content from PDF:")
-                st.info(best_match)
+        for para in paragraphs:
+            para_doc = nlp(para.lower())
+            score = question_doc.similarity(para_doc)
+            if score > best_score:
+                best_score = score
+                best_para = para
 
-                expected_words = set(best_match.lower().split())
-                user_words = set(answer_input.lower().split())
-                missed = expected_words - user_words
+        st.markdown("### 🔍 Closest content from PDF:")
+        st.info(best_para)
 
-                if missed:
-                    st.warning("⚠️ You missed these keywords:\n\n" + ', '.join(missed))
-                else:
-                    st.success("🎉 Great job! You covered all the keywords.")
-            else:
-                st.error("❌ No matching content found in PDF.")
-    except Exception as e:
-        st.error(f"Error reading PDF: {e}")
+        answer_words = set(w.text.lower() for w in nlp(answer_input))
+        expected_words = set(w.text.lower() for w in nlp(best_para))
+        missed = expected_words - answer_words
+
+        if missed:
+            feedback = "You missed the following important keywords: " + ", ".join(missed)
+            st.warning("⚠️ " + feedback)
+            text_to_speech(feedback)
+        else:
+            st.success("🎉 Excellent! You covered all the key concepts.")
+            text_to_speech("Excellent! You covered all the key concepts.")
 else:
-    st.info("👆 Please upload a PDF to begin.")
+    st.info("📄 Please upload a PDF to begin.")
