@@ -1,93 +1,58 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
+import streamlit as st
 import PyPDF2
-import speech_recognition as sr
-import pyttsx3
 
-pdf_text = ""
+# Title and intro
+st.set_page_config(page_title="Voice Revision Web App (Demo)", layout="centered")
+st.title("📘 Voice Revision Web App (Demo)")
+st.write("Upload a **PDF** of your notes, type your **question** and **your answer**, and receive keyword feedback!")
 
-def speak(text):
-    engine = pyttsx3.init()
-    engine.say(text)
-    engine.runAndWait()
+# PDF Upload
+pdf_file = st.file_uploader("📤 Upload your Notes PDF", type=['pdf'])
 
-def select_pdf():
-    global pdf_text
-    file_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
-    if file_path:
-        with open(file_path, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-            text = ""
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text
-            pdf_text = text.lower()
-        result_text.delete(1.0, tk.END)
-        result_text.insert(tk.END, "PDF Loaded Successfully!")
+if pdf_file is not None:
+    try:
+        reader = PyPDF2.PdfReader(pdf_file)
+        text = ""
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text
 
-def get_speech_input(prompt):
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        speak(prompt)
-        audio = recognizer.listen(source)
-        try:
-            user_text = recognizer.recognize_google(audio)
-            return user_text.lower()
-        except:
-            return ""
+        st.success("✅ PDF Loaded Successfully!")
 
-def ask_question():
-    global question_text
-    question_text = get_speech_input("Please ask your question.")
-    result_text.insert(tk.END, "\nQuestion Detected: " + question_text)
+        # User Question
+        question_input = st.text_input("❓ Type your Question here:")
 
-def answer_question():
-    global question_text
-    answer_text = get_speech_input("Please give your answer.")
-    result_text.insert(tk.END, "\nAnswer Detected: " + answer_text)
+        # User Answer
+        answer_input = st.text_input("📝 Type your Answer here:")
 
-    # Basic match: Find related content from PDF
-    if pdf_text:
-        paragraphs = pdf_text.split('\n')
-        best_match = ""
-        max_matches = 0
-        question_words = question_text.split()
+        if st.button("Check My Answer"):
+            paragraphs = text.split('\n')
+            best_match = ""
+            max_matches = 0
+            question_words = question_input.lower().split()
 
-        for para in paragraphs:
-            matches = sum(1 for word in question_words if word in para)
-            if matches > max_matches:
-                max_matches = matches
-                best_match = para
+            for para in paragraphs:
+                matches = sum(1 for word in question_words if word in para.lower())
+                if matches > max_matches:
+                    max_matches = matches
+                    best_match = para
 
-        if best_match:
-            expected_words = set(best_match.split())
-            user_words = set(answer_text.split())
-            missed = expected_words - user_words
+            if best_match.strip():
+                st.markdown("### 🔍 Closest content from PDF:")
+                st.info(best_match)
 
-            result_text.insert(tk.END, "\nMissed Keywords: " + ', '.join(missed))
-            speak("You missed these keywords: " + ', '.join(missed))
-        else:
-            result_text.insert(tk.END, "\nNo relevant content found in PDF.")
-            speak("No relevant content found.")
-    else:
-        result_text.insert(tk.END, "\nPlease load a PDF first.")
-        speak("Please load a PDF first.")
+                expected_words = set(best_match.lower().split())
+                user_words = set(answer_input.lower().split())
+                missed = expected_words - user_words
 
-# GUI setup
-root = tk.Tk()
-root.title("Voice Revision App")
-
-select_btn = tk.Button(root, text="Select PDF", command=select_pdf)
-select_btn.pack(pady=5)
-
-ask_btn = tk.Button(root, text="Ask Question (Voice)", command=ask_question)
-ask_btn.pack(pady=5)
-
-answer_btn = tk.Button(root, text="Answer Question (Voice)", command=answer_question)
-answer_btn.pack(pady=5)
-
-result_text = tk.Text(root, height=20, width=60)
-result_text.pack(pady=10)
-
-root.mainloop()
+                if missed:
+                    st.warning("⚠️ You missed these keywords:\n\n" + ', '.join(missed))
+                else:
+                    st.success("🎉 Great job! You covered all the keywords.")
+            else:
+                st.error("❌ No matching content found in PDF.")
+    except Exception as e:
+        st.error(f"Error reading PDF: {e}")
+else:
+    st.info("👆 Please upload a PDF to begin.")
