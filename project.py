@@ -1,81 +1,64 @@
 import streamlit as st
-import fitz  # PyMuPDF
-import re
-import math
-from collections import Counter
 
-# ----------- Utility Functions -----------
+# --- Game Logic Functions ---
 
-def extract_text_from_pdf(file):
-    text = ""
-    with fitz.open(stream=file.read(), filetype="pdf") as doc:
-        for page in doc:
-            text += page.get_text("text") + "\n"
-    return text
+def check_winner(board):
+    win_conditions = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],   # Rows
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],   # Columns
+        [0, 4, 8], [2, 4, 6]               # Diagonals
+    ]
+    for combo in win_conditions:
+        a, b, c = combo
+        if board[a] == board[b] == board[c] and board[a] != "":
+            return board[a]
+    if "" not in board:
+        return "Draw"
+    return None
 
-def tokenize(text):
-    text = re.sub(r'[^a-zA-Z0-9\s]', '', text.lower())
-    return text.split()
+def reset_game():
+    st.session_state.board = [""] * 9
+    st.session_state.current_player = "X"
+    st.session_state.winner = None
 
-def term_frequency(words):
-    return Counter(words)
+# --- Streamlit App ---
 
-def cosine_similarity(text1, text2):
-    words1 = tokenize(text1)
-    words2 = tokenize(text2)
+st.set_page_config("Tic-Tac-Toe Game 🎮", layout="centered")
+st.title("❌🔵 Tic-Tac-Toe (XOX) Game")
+st.markdown("Play against a friend — take turns!")
 
-    tf1 = term_frequency(words1)
-    tf2 = term_frequency(words2)
+# --- Initialize session state ---
+if "board" not in st.session_state:
+    reset_game()
 
-    all_words = set(tf1.keys()).union(tf2.keys())
-    vec1 = [tf1.get(word, 0) for word in all_words]
-    vec2 = [tf2.get(word, 0) for word in all_words]
+board = st.session_state.board
+current_player = st.session_state.current_player
+winner = st.session_state.winner
 
-    dot = sum(x * y for x, y in zip(vec1, vec2))
-    mag1 = math.sqrt(sum(x ** 2 for x in vec1))
-    mag2 = math.sqrt(sum(y ** 2 for y in vec2))
-
-    return dot / (mag1 * mag2 + 1e-9)
-
-# Split into full topics using double newlines or blocks
-def split_into_topic_blocks(text):
-    blocks = re.split(r'\n{2,}', text)
-    return [block.strip() for block in blocks if len(block.strip()) > 40]
-
-# Find multiple relevant topic blocks
-def find_relevant_blocks(question, blocks, threshold=0.2):
-    results = []
-    for block in blocks:
-        score = cosine_similarity(question, block)
-        if score >= threshold:
-            results.append((block.strip(), score))
-    results.sort(key=lambda x: x[1], reverse=True)
-    return results
-
-# ----------- Streamlit UI -----------
-
-st.set_page_config("📚 Smart PDF Chatbot", layout="centered")
-st.title("🤖 Smart PDF Chatbot (Full-Topic Answers)")
-
-uploaded_file = st.file_uploader("📂 Upload your PDF", type=["pdf"])
-
-if uploaded_file:
-    pdf_text = extract_text_from_pdf(uploaded_file)
-    st.success("✅ PDF text successfully extracted!")
-
-    blocks = split_into_topic_blocks(pdf_text)
-    st.info(f"🔍 Prepared {len(blocks)} topic blocks for semantic search.")
-
-    question = st.text_input("❓ Ask your question:")
-
-    if st.button("🔎 Get Full Answers") and question:
-        matches = find_relevant_blocks(question, blocks)
-
-        st.subheader("📘 Relevant Topic Answers:")
-        if matches:
-            for i, (block, score) in enumerate(matches, 1):
-                st.markdown(f"### {i}. (Score: {score:.2f})")
-                st.markdown(block)
-                st.markdown("---")
+# --- Game Board UI ---
+cols = st.columns(3)
+for i in range(9):
+    with cols[i % 3]:
+        if board[i] == "":
+            if not winner:
+                if st.button(" ", key=i, help=f"Cell {i+1}"):
+                    board[i] = current_player
+                    st.session_state.winner = check_winner(board)
+                    if not st.session_state.winner:
+                        st.session_state.current_player = "O" if current_player == "X" else "X"
+                    st.experimental_rerun()
         else:
-            st.error("❌ Sorry, no relevant topic found in the PDF.")
+            st.markdown(f"### {board[i]}")
+
+# --- Game Status ---
+if winner == "Draw":
+    st.info("It's a draw! 🤝")
+elif winner:
+    st.success(f"🎉 Player {winner} wins!")
+else:
+    st.write(f"Current Player: **{current_player}**")
+
+# --- Reset Button ---
+if st.button("🔄 Restart Game"):
+    reset_game()
+    st.experimental_rerun()
