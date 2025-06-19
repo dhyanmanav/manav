@@ -12,16 +12,29 @@ def extract_text_from_pdf(file):
             text += page.get_text()
     return text
 
-# Simple keyword overlap comparison
-def compare_answers(user_answer, pdf_text):
+# Find best matching paragraph for the question
+def find_best_matching_text(question, pdf_text):
+    question_words = set(question.lower().split())
+    best_match = ""
+    max_overlap = 0
+
+    for para in pdf_text.split("\n"):
+        para_words = set(para.lower().split())
+        common = question_words.intersection(para_words)
+        if len(common) > max_overlap:
+            max_overlap = len(common)
+            best_match = para
+
+    return best_match
+
+# Determine if user's answer is close enough
+def is_answer_correct(user_answer, correct_text):
     user_words = set(user_answer.lower().split())
-    pdf_words = set(pdf_text.lower().split())
+    correct_words = set(correct_text.lower().split())
+    match = user_words.intersection(correct_words)
 
-    matched_keywords = user_words.intersection(pdf_words)
-    missing_keywords = pdf_words - user_words
-
-    score = len(matched_keywords) / (len(pdf_words) + 1) * 100
-    return score, matched_keywords, missing_keywords
+    score = len(match) / (len(correct_words) + 1) * 100  # +1 avoids divide-by-zero
+    return score, score >= 60  # 60% threshold for "You're right"
 
 # Voice input using speech_recognition
 def recognize_speech():
@@ -37,7 +50,7 @@ def recognize_speech():
         st.error("❌ Could not understand your voice. Try again.")
         return ""
 
-# Naive name extractor
+# Naive name extractor from resume
 def extract_name_simple(text):
     for line in text.split("\n"):
         if "name" in line.lower():
@@ -63,13 +76,18 @@ if uploaded_file:
 
     user_answer = st.text_area("✍️ Enter your answer here:")
 
-    if st.button("Evaluate Answer") and user_answer:
-        score, matched, missed = compare_answers(user_answer, pdf_text)
+    if st.button("Evaluate Answer") and user_answer and question:
+        best_answer = find_best_matching_text(question, pdf_text)
+        score, is_correct = is_answer_correct(user_answer, best_answer)
 
         st.subheader("📊 Feedback:")
-        st.write(f"**Match Score**: {score:.2f}%")
-        st.write(f"✅ Matched Keywords: {', '.join(matched)}")
-        st.write(f"❌ Missing Keywords: {', '.join(missed)}")
+        if is_correct:
+            st.success("✅ You're right!")
+            st.write(f"🎯 Match Score: {score:.2f}%")
+        else:
+            st.error("❌ Not quite correct.")
+            st.write(f"🎯 Match Score: {score:.2f}%")
+            st.info(f"📖 Correct answer might be:\n\n{best_answer}")
 
     if st.button("👤 Detect Name from Resume"):
         name = extract_name_simple(pdf_text)
