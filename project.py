@@ -1,73 +1,91 @@
 import streamlit as st
-import PyPDF2
-import spacy
-from gtts import gTTS
+import fitz  # PyMuPDF
+import difflib
+import tempfile
 import os
+import pyttsx3
+import speech_recognition as sr
 
-st.set_page_config(page_title="Voice Revision Web App", page_icon="📄")
-st.title("📚 Voice Revision Web App (Cloud Version)")
-st.write("Upload a PDF, type your question and answer, and get feedback with optional voice output!")
+# Optional fallback if spaCy fails
+def extract_name_fallback(text):
+    # Very simple name guesser using the first line or common patterns
+    lines = text.strip().split("\n")
+    for line in lines:
+        if "name" in line.lower():
+            return line.strip().split(":")[-1].strip()
+    return lines[0] if lines else "Unknown"
 
-# Load spaCy model
-@st.cache_resource
-def load_model():
-    return spacy.load("en_core_web_sm")
-
-nlp = load_model()
-
-# PDF Upload
-pdf_file = st.file_uploader("📄 Upload your Notes PDF", type=['pdf'])
-
-if pdf_file is not None:
-    reader = PyPDF2.PdfReader(pdf_file)
+# Extract text from PDF
+def extract_text_from_pdf(file):
     text = ""
-    for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text
+    pdf = fitz.open(stream=file.read(), filetype="pdf")
+    for page in pdf:
+        text += page.get_text()
+    return text
 
-    st.success("✅ PDF Loaded Successfully!")
+# Get closest matching sentence from PDF
+def get_closest_match(question, text):
+    sentences = text.split(".")
+    return difflib.get_close_matches(question, sentences, n=1, cutoff=0.3)[0] if sentences else ""
 
-    question_input = st.text_input("❓ Type your Question here:")
-    answer_input = st.text_area("📝 Type your Answer here:")
+# Voice input (optional use)
+def recognize_speech():
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        st.info("Listening for your question...")
+        audio = r.listen(source)
+    try:
+        query = r.recognize_google(audio)
+        st.success(f"You said: {query}")
+        return query
+    except Exception as e:
+        st.error("Could not understand. Try again.")
+        return ""
 
-    if st.button("Check My Answer"):
-        paragraphs = text.split('\n')
-        best_match = ""
-        max_matches = 0
-        question_words = question_input.lower().split()
+# Voice output
+def speak(text):
+    engine = pyttsx3.init()
+    engine.say(text)
+    engine.runAndWait()
 
-        for para in paragraphs:
-            matches = sum(1 for word in question_words if word in para.lower())
-            if matches > max_matches:
-                max_matches = matches
-                best_match = para
+# Streamlit UI
+st.set_page_config(page_title="PDF QA App", layout="centered")
+st.title("📄 PDF Question Answer Checker with Voice")
 
-        if best_match:
-            st.markdown("### 🔎 Closest content from PDF:")
-            st.info(best_match)
+uploaded_file = st.file_uploader("Upload a PDF file", type="pdf")
 
-            # NLP comparison
-            expected_doc = nlp(best_match.lower())
-            answer_doc = nlp(answer_input.lower())
+if uploaded_file:
+    st.success("PDF Loaded Successfully!")
+    pdf_text = extract_text_from_pdf(uploaded_file)
 
-            expected_words = {token.lemma_ for token in expected_doc if not token.is_stop and token.is_alpha}
-            answer_words = {token.lemma_ for token in answer_doc if not token.is_stop and token.is_alpha}
+    # Question input
+    st.write("🎤 You can type or use voice input for your question")
+    use_voice = st.checkbox("Use Voice Input")
 
-            missed_keywords = expected_words - answer_words
+    if use_voice:
+        question = recognize_speech()
+    else:
+        question = st.text_input("Type your Question here:")
 
-            if missed_keywords:
-                st.warning("⚠️ You missed these keywords: " + ', '.join(missed_keywords))
-            else:
-                st.success("🎉 Great job! You covered all the important keywords.")
+    user_answer = st.text_area("Type your Answer here:")
 
-            # Optional voice output
-            if st.checkbox("🔊 Play Answer Feedback (Text-to-Speech)"):
-                feedback = f"You missed the keywords: {', '.join(missed_keywords)}" if missed_keywords else "Great job! You covered everything."
-                tts = gTTS(feedback)
-                tts.save("feedback.mp3")
-                st.audio("feedback.mp3", format="audio/mp3")
+    if st.button("Check My Answer") and question and user_answer:
+        closest_content = get_closest_match(question, pdf_text)
+        st.subheader("🔍 Closest content from PDF:")
+        st.info(closest_content)
+
+        # Simple keyword comparison
+        missed_keywords = [word for word in closest_content.lower().split() if word not in user_answer.lower()]
+        if missed_keywords:
+            st.warning("⚠️ You missed these keywords:")
+            st.write(", ".join(missed_keywords))
         else:
-            st.error("❌ No relevant content found in the PDF.")
-else:
-    st.info("📥 Please upload a PDF to begin.")
+            st.success("✅ Your answer looks good!")
+
+        speak("Your answer has been checked!")
+
+    # Extract name from resume
+    if st.button("👤 What is the name of the candidate?"):
+        name = extract_name_fallback(pdf_text)
+        st.success(f"The name might be: {name}")
+        speak(f"The name might be {name}")

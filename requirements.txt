@@ -1,4 +1,4 @@
 streamlit
-PyPDF2
-spacy
-gtts
+PyMuPDF
+speechrecognition
+pyttsx3
