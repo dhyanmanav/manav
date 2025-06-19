@@ -1,6 +1,5 @@
 import streamlit as st
 import fitz  # PyMuPDF
-import pyttsx3
 import speech_recognition as sr
 
 # --- Utilities ---
@@ -13,18 +12,18 @@ def extract_text_from_pdf(file):
             text += page.get_text()
     return text
 
-# Simple keyword comparison
-def compare_answers(user_answer, pdf_text, question):
+# Simple keyword overlap comparison
+def compare_answers(user_answer, pdf_text):
     user_words = set(user_answer.lower().split())
     pdf_words = set(pdf_text.lower().split())
 
     matched_keywords = user_words.intersection(pdf_words)
     missing_keywords = pdf_words - user_words
 
-    score = len(matched_keywords) / (len(pdf_words) + 1) * 100  # +1 avoids division by zero
+    score = len(matched_keywords) / (len(pdf_words) + 1) * 100
     return score, matched_keywords, missing_keywords
 
-# Voice input
+# Voice input using speech_recognition
 def recognize_speech():
     r = sr.Recognizer()
     with sr.Microphone() as source:
@@ -38,29 +37,23 @@ def recognize_speech():
         st.error("❌ Could not understand your voice. Try again.")
         return ""
 
-# Text to speech
-def speak_text(text):
-    engine = pyttsx3.init()
-    engine.say(text)
-    engine.runAndWait()
-
-# Attempt name extraction
+# Naive name extractor
 def extract_name_simple(text):
     for line in text.split("\n"):
         if "name" in line.lower():
             return line.split(":")[-1].strip()
-    return text.split("\n")[0]  # Fallback: first line
+    return text.split("\n")[0]
 
 # --- Streamlit UI ---
 
 st.set_page_config(page_title="PDF QA Feedback App", layout="centered")
-st.title("📑 PDF Question & Answer Evaluator (Streamlit-Friendly)")
+st.title("📑 PDF Question & Answer Evaluator (Cloud Compatible)")
 
 uploaded_file = st.file_uploader("Upload your PDF file", type=["pdf"])
 
 if uploaded_file:
     pdf_text = extract_text_from_pdf(uploaded_file)
-    st.success("✅ PDF text extracted!")
+    st.success("✅ PDF text extracted successfully!")
 
     use_voice = st.checkbox("🎤 Use voice to ask the question")
     if use_voice:
@@ -70,17 +63,14 @@ if uploaded_file:
 
     user_answer = st.text_area("✍️ Enter your answer here:")
 
-    if st.button("Evaluate Answer") and user_answer and pdf_text:
-        score, matched, missed = compare_answers(user_answer, pdf_text, question)
+    if st.button("Evaluate Answer") and user_answer:
+        score, matched, missed = compare_answers(user_answer, pdf_text)
 
         st.subheader("📊 Feedback:")
         st.write(f"**Match Score**: {score:.2f}%")
         st.write(f"✅ Matched Keywords: {', '.join(matched)}")
         st.write(f"❌ Missing Keywords: {', '.join(missed)}")
 
-        speak_text("Your answer evaluation is complete.")
-
     if st.button("👤 Detect Name from Resume"):
         name = extract_name_simple(pdf_text)
         st.success(f"Candidate name might be: **{name}**")
-        speak_text(f"The name might be {name}")
