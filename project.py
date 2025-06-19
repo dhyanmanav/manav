@@ -1,86 +1,73 @@
 import streamlit as st
 import PyPDF2
-import speech_recognition as sr
+import spacy
 from gtts import gTTS
 import os
-import spacy
-from io import BytesIO
 
-nlp = spacy.load("en_core_web_sm")
+st.set_page_config(page_title="Voice Revision Web App", page_icon="📄")
+st.title("📚 Voice Revision Web App (Cloud Version)")
+st.write("Upload a PDF, type your question and answer, and get feedback with optional voice output!")
 
-st.set_page_config(page_title="Smart PDF QA", layout="centered")
-st.title("🎙️ Voice-Enabled PDF Question Answer Checker")
+# Load spaCy model
+@st.cache_resource
+def load_model():
+    return spacy.load("en_core_web_sm")
+
+nlp = load_model()
 
 # PDF Upload
-pdf_file = st.file_uploader("📤 Upload your Notes PDF", type=['pdf'])
+pdf_file = st.file_uploader("📄 Upload your Notes PDF", type=['pdf'])
 
-def text_to_speech(text):
-    tts = gTTS(text)
-    tts.save("feedback.mp3")
-    audio_file = open("feedback.mp3", "rb")
-    st.audio(audio_file.read(), format='audio/mp3')
-
-def voice_input(label):
-    st.write(f"🎙️ {label}")
-    if st.button(f"Start Recording for {label}"):
-        recognizer = sr.Recognizer()
-        with sr.Microphone() as source:
-            st.info("Listening...")
-            audio = recognizer.listen(source)
-        try:
-            text = recognizer.recognize_google(audio)
-            st.success("Captured: " + text)
-            return text
-        except sr.UnknownValueError:
-            st.error("Could not understand audio.")
-        except sr.RequestError:
-            st.error("Could not request results.")
-    return ""
-
-if pdf_file:
+if pdf_file is not None:
     reader = PyPDF2.PdfReader(pdf_file)
-    pdf_text = ""
+    text = ""
     for page in reader.pages:
         page_text = page.extract_text()
         if page_text:
-            pdf_text += page_text
+            text += page_text
+
     st.success("✅ PDF Loaded Successfully!")
 
-    option = st.radio("Choose input mode:", ("Type", "Voice"))
-
-    if option == "Type":
-        question_input = st.text_input("❓ Type your Question:")
-        answer_input = st.text_input("📝 Type your Answer:")
-    else:
-        question_input = voice_input("Question")
-        answer_input = voice_input("Answer")
+    question_input = st.text_input("❓ Type your Question here:")
+    answer_input = st.text_area("📝 Type your Answer here:")
 
     if st.button("Check My Answer"):
-        paragraphs = pdf_text.split('\n')
-        best_para = ""
-        best_score = 0
-        question_doc = nlp(question_input.lower())
+        paragraphs = text.split('\n')
+        best_match = ""
+        max_matches = 0
+        question_words = question_input.lower().split()
 
         for para in paragraphs:
-            para_doc = nlp(para.lower())
-            score = question_doc.similarity(para_doc)
-            if score > best_score:
-                best_score = score
-                best_para = para
+            matches = sum(1 for word in question_words if word in para.lower())
+            if matches > max_matches:
+                max_matches = matches
+                best_match = para
 
-        st.markdown("### 🔍 Closest content from PDF:")
-        st.info(best_para)
+        if best_match:
+            st.markdown("### 🔎 Closest content from PDF:")
+            st.info(best_match)
 
-        answer_words = set(w.text.lower() for w in nlp(answer_input))
-        expected_words = set(w.text.lower() for w in nlp(best_para))
-        missed = expected_words - answer_words
+            # NLP comparison
+            expected_doc = nlp(best_match.lower())
+            answer_doc = nlp(answer_input.lower())
 
-        if missed:
-            feedback = "You missed the following important keywords: " + ", ".join(missed)
-            st.warning("⚠️ " + feedback)
-            text_to_speech(feedback)
+            expected_words = {token.lemma_ for token in expected_doc if not token.is_stop and token.is_alpha}
+            answer_words = {token.lemma_ for token in answer_doc if not token.is_stop and token.is_alpha}
+
+            missed_keywords = expected_words - answer_words
+
+            if missed_keywords:
+                st.warning("⚠️ You missed these keywords: " + ', '.join(missed_keywords))
+            else:
+                st.success("🎉 Great job! You covered all the important keywords.")
+
+            # Optional voice output
+            if st.checkbox("🔊 Play Answer Feedback (Text-to-Speech)"):
+                feedback = f"You missed the keywords: {', '.join(missed_keywords)}" if missed_keywords else "Great job! You covered everything."
+                tts = gTTS(feedback)
+                tts.save("feedback.mp3")
+                st.audio("feedback.mp3", format="audio/mp3")
         else:
-            st.success("🎉 Excellent! You covered all the key concepts.")
-            text_to_speech("Excellent! You covered all the key concepts.")
+            st.error("❌ No relevant content found in the PDF.")
 else:
-    st.info("📄 Please upload a PDF to begin.")
+    st.info("📥 Please upload a PDF to begin.")
