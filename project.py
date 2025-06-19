@@ -1,77 +1,87 @@
 import streamlit as st
 import fitz  # PyMuPDF
-import speech_recognition as sr
+import re
+import math
+from collections import Counter
 
-# --- Utilities ---
+# ----------- Utility Functions -----------
 
 # Extract all text from PDF
 def extract_text_from_pdf(file):
     text = ""
-    with fitz.open(stream=file.read(), filetype="pdf") as pdf:
-        for page in pdf:
+    with fitz.open(stream=file.read(), filetype="pdf") as doc:
+        for page in doc:
             text += page.get_text()
     return text
 
-# Search best matching paragraph for a given question
-def search_answer_from_pdf(question, pdf_text):
-    question_words = set(question.lower().split())
-    best_match = ""
+# Clean and tokenize text
+def tokenize(text):
+    text = re.sub(r'[^a-zA-Z0-9\s]', '', text.lower())
+    return text.split()
+
+# Compute term frequency
+def term_frequency(words):
+    return Counter(words)
+
+# Compute cosine similarity between two texts
+def cosine_similarity(text1, text2):
+    words1 = tokenize(text1)
+    words2 = tokenize(text2)
+
+    tf1 = term_frequency(words1)
+    tf2 = term_frequency(words2)
+
+    all_words = set(tf1.keys()).union(set(tf2.keys()))
+
+    vec1 = [tf1.get(word, 0) for word in all_words]
+    vec2 = [tf2.get(word, 0) for word in all_words]
+
+    dot = sum(x * y for x, y in zip(vec1, vec2))
+    mag1 = math.sqrt(sum(x ** 2 for x in vec1))
+    mag2 = math.sqrt(sum(y ** 2 for y in vec2))
+
+    return dot / (mag1 * mag2 + 1e-9)  # Avoid division by zero
+
+# Search best-matching paragraph
+def find_best_answer(question, paragraphs, threshold=0.2):
+    best_para = ""
     best_score = 0
 
-    for para in pdf_text.split("\n"):
-        para_words = set(para.lower().split())
-        common = question_words.intersection(para_words)
-        score = len(common)
-
+    for para in paragraphs:
+        score = cosine_similarity(question, para)
         if score > best_score:
             best_score = score
-            best_match = para.strip()
+            best_para = para
 
-    return best_match if best_match else "❌ No relevant answer found in the PDF."
+    if best_score >= threshold:
+        return best_para.strip(), best_score
+    else:
+        return None, best_score
 
-# Recognize voice question using microphone
-def recognize_speech():
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.info("🎙️ Listening... Please ask your question.")
-        audio = r.listen(source)
-    try:
-        query = r.recognize_google(audio)
-        st.success(f"🗣️ You said: {query}")
-        return query
-    except Exception:
-        st.error("❌ Sorry, could not recognize your voice. Try again.")
-        return ""
+# ----------- Streamlit UI -----------
 
-# Extract name (optional)
-def extract_name_simple(text):
-    for line in text.split("\n"):
-        if "name" in line.lower():
-            return line.split(":")[-1].strip()
-    return text.split("\n")[0]
+st.set_page_config("📚 AI PDF Chatbot", layout="centered")
+st.title("🤖 Smart PDF Chatbot (Offline, No AI Model)")
 
-# --- Streamlit UI ---
-
-st.set_page_config(page_title="PDF Answer Finder", layout="centered")
-st.title("🔍 Ask a Question & Get Answer from PDF")
-
-uploaded_file = st.file_uploader("📄 Upload a PDF file", type=["pdf"])
+uploaded_file = st.file_uploader("📂 Upload a PDF to train the bot", type=["pdf"])
 
 if uploaded_file:
-    pdf_text = extract_text_from_pdf(uploaded_file)
-    st.success("✅ PDF loaded and text extracted!")
+    raw_text = extract_text_from_pdf(uploaded_file)
+    st.success("✅ PDF successfully read!")
 
-    use_voice = st.checkbox("🎤 Use voice to ask a question")
-    if use_voice:
-        question = recognize_speech()
-    else:
-        question = st.text_input("❓ Enter your question:")
+    # Pre-split into paragraphs
+    paragraphs = [p.strip() for p in raw_text.split("\n") if len(p.strip()) > 40]
 
-    if st.button("🔎 Find Answer") and question:
-        answer = search_answer_from_pdf(question, pdf_text)
-        st.subheader("📘 Answer from PDF:")
-        st.info(answer)
+    st.info(f"🔍 Loaded {len(paragraphs)} paragraphs for search.")
 
-    if st.button("👤 Detect Name from Resume"):
-        name = extract_name_simple(pdf_text)
-        st.success(f"Candidate name might be: **{name}**")
+    question = st.text_input("❓ Ask a question related to the PDF")
+
+    if st.button("💬 Get Answer") and question:
+        answer, score = find_best_answer(question, paragraphs)
+
+        st.subheader("🧠 Answer:")
+        if answer:
+            st.success(answer)
+            st.caption(f"📈 Relevance score: {score:.3f}")
+        else:
+            st.error("❌ Sorry, I couldn’t find a relevant answer in the PDF.")
