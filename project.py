@@ -6,7 +6,6 @@ from collections import Counter
 
 # ----------- Utility Functions -----------
 
-# Extract all text from PDF
 def extract_text_from_pdf(file):
     text = ""
     with fitz.open(stream=file.read(), filetype="pdf") as doc:
@@ -14,16 +13,13 @@ def extract_text_from_pdf(file):
             text += page.get_text()
     return text
 
-# Clean and tokenize text
 def tokenize(text):
     text = re.sub(r'[^a-zA-Z0-9\s]', '', text.lower())
     return text.split()
 
-# Compute term frequency
 def term_frequency(words):
     return Counter(words)
 
-# Compute cosine similarity between two texts
 def cosine_similarity(text1, text2):
     words1 = tokenize(text1)
     words2 = tokenize(text2)
@@ -32,7 +28,6 @@ def cosine_similarity(text1, text2):
     tf2 = term_frequency(words2)
 
     all_words = set(tf1.keys()).union(set(tf2.keys()))
-
     vec1 = [tf1.get(word, 0) for word in all_words]
     vec2 = [tf2.get(word, 0) for word in all_words]
 
@@ -40,48 +35,40 @@ def cosine_similarity(text1, text2):
     mag1 = math.sqrt(sum(x ** 2 for x in vec1))
     mag2 = math.sqrt(sum(y ** 2 for y in vec2))
 
-    return dot / (mag1 * mag2 + 1e-9)  # Avoid division by zero
+    return dot / (mag1 * mag2 + 1e-9)  # Avoid divide by zero
 
-# Search best-matching paragraph
-def find_best_answer(question, paragraphs, threshold=0.2):
-    best_para = ""
-    best_score = 0
-
+def find_all_relevant_paragraphs(question, paragraphs, threshold=0.2):
+    matches = []
     for para in paragraphs:
         score = cosine_similarity(question, para)
-        if score > best_score:
-            best_score = score
-            best_para = para
-
-    if best_score >= threshold:
-        return best_para.strip(), best_score
-    else:
-        return None, best_score
+        if score >= threshold:
+            matches.append((para.strip(), score))
+    # Sort by score (high to low)
+    matches.sort(key=lambda x: x[1], reverse=True)
+    return matches
 
 # ----------- Streamlit UI -----------
 
 st.set_page_config("📚 AI PDF Chatbot", layout="centered")
-st.title("🤖 Smart PDF Chatbot (Offline, No AI Model)")
+st.title("🤖 PDF Chatbot: Get All Relevant Answers")
 
-uploaded_file = st.file_uploader("📂 Upload a PDF to train the bot", type=["pdf"])
+uploaded_file = st.file_uploader("📂 Upload a PDF", type=["pdf"])
 
 if uploaded_file:
     raw_text = extract_text_from_pdf(uploaded_file)
-    st.success("✅ PDF successfully read!")
+    st.success("✅ PDF loaded successfully!")
 
-    # Pre-split into paragraphs
     paragraphs = [p.strip() for p in raw_text.split("\n") if len(p.strip()) > 40]
+    st.info(f"🔍 Loaded {len(paragraphs)} searchable paragraphs.")
 
-    st.info(f"🔍 Loaded {len(paragraphs)} paragraphs for search.")
+    question = st.text_input("❓ Ask your question:")
 
-    question = st.text_input("❓ Ask a question related to the PDF")
+    if st.button("🔎 Find All Answers") and question:
+        results = find_all_relevant_paragraphs(question, paragraphs)
 
-    if st.button("💬 Get Answer") and question:
-        answer, score = find_best_answer(question, paragraphs)
-
-        st.subheader("🧠 Answer:")
-        if answer:
-            st.success(answer)
-            st.caption(f"📈 Relevance score: {score:.3f}")
+        st.subheader("📘 Relevant Answers:")
+        if results:
+            for i, (para, score) in enumerate(results, 1):
+                st.markdown(f"**{i}. (Score: {score:.3f})**\n\n{para}\n---")
         else:
-            st.error("❌ Sorry, I couldn’t find a relevant answer in the PDF.")
+            st.error("❌ No relevant answers found in the PDF.")
