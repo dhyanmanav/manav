@@ -46,7 +46,7 @@ for i in range(9):
                     st.session_state.winner = check_winner(board)
                     if not st.session_state.winner:
                         st.session_state.current_player = "O" if current_player == "X" else "X"
-                    st.experimental_rerun()
+                    st.rerun()
         else:
             st.markdown(f"### {board[i]}")
 
