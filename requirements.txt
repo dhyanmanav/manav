@@ -1,6 +1,4 @@
 streamlit
 PyPDF2
-SpeechRecognition
-pyaudio
-gTTS
 spacy
+gtts
