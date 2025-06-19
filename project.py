@@ -4,7 +4,7 @@ import speech_recognition as sr
 
 # --- Utilities ---
 
-# Extract text from PDF using PyMuPDF
+# Extract all text from PDF
 def extract_text_from_pdf(file):
     text = ""
     with fitz.open(stream=file.read(), filetype="pdf") as pdf:
@@ -12,45 +12,38 @@ def extract_text_from_pdf(file):
             text += page.get_text()
     return text
 
-# Find best matching paragraph for the question
-def find_best_matching_text(question, pdf_text):
+# Search best matching paragraph for a given question
+def search_answer_from_pdf(question, pdf_text):
     question_words = set(question.lower().split())
     best_match = ""
-    max_overlap = 0
+    best_score = 0
 
     for para in pdf_text.split("\n"):
         para_words = set(para.lower().split())
         common = question_words.intersection(para_words)
-        if len(common) > max_overlap:
-            max_overlap = len(common)
-            best_match = para
+        score = len(common)
 
-    return best_match
+        if score > best_score:
+            best_score = score
+            best_match = para.strip()
 
-# Determine if user's answer is close enough
-def is_answer_correct(user_answer, correct_text):
-    user_words = set(user_answer.lower().split())
-    correct_words = set(correct_text.lower().split())
-    match = user_words.intersection(correct_words)
+    return best_match if best_match else "❌ No relevant answer found in the PDF."
 
-    score = len(match) / (len(correct_words) + 1) * 100  # +1 avoids divide-by-zero
-    return score, score >= 60  # 60% threshold for "You're right"
-
-# Voice input using speech_recognition
+# Recognize voice question using microphone
 def recognize_speech():
     r = sr.Recognizer()
     with sr.Microphone() as source:
-        st.info("🎙️ Listening... Speak now.")
+        st.info("🎙️ Listening... Please ask your question.")
         audio = r.listen(source)
     try:
         query = r.recognize_google(audio)
-        st.success(f"You said: {query}")
+        st.success(f"🗣️ You said: {query}")
         return query
-    except Exception as e:
-        st.error("❌ Could not understand your voice. Try again.")
+    except Exception:
+        st.error("❌ Sorry, could not recognize your voice. Try again.")
         return ""
 
-# Naive name extractor from resume
+# Extract name (optional)
 def extract_name_simple(text):
     for line in text.split("\n"):
         if "name" in line.lower():
@@ -59,35 +52,25 @@ def extract_name_simple(text):
 
 # --- Streamlit UI ---
 
-st.set_page_config(page_title="PDF QA Feedback App", layout="centered")
-st.title("📑 PDF Question & Answer Evaluator (Cloud Compatible)")
+st.set_page_config(page_title="PDF Answer Finder", layout="centered")
+st.title("🔍 Ask a Question & Get Answer from PDF")
 
-uploaded_file = st.file_uploader("Upload your PDF file", type=["pdf"])
+uploaded_file = st.file_uploader("📄 Upload a PDF file", type=["pdf"])
 
 if uploaded_file:
     pdf_text = extract_text_from_pdf(uploaded_file)
-    st.success("✅ PDF text extracted successfully!")
+    st.success("✅ PDF loaded and text extracted!")
 
-    use_voice = st.checkbox("🎤 Use voice to ask the question")
+    use_voice = st.checkbox("🎤 Use voice to ask a question")
     if use_voice:
         question = recognize_speech()
     else:
-        question = st.text_input("🧠 Enter your question:")
+        question = st.text_input("❓ Enter your question:")
 
-    user_answer = st.text_area("✍️ Enter your answer here:")
-
-    if st.button("Evaluate Answer") and user_answer and question:
-        best_answer = find_best_matching_text(question, pdf_text)
-        score, is_correct = is_answer_correct(user_answer, best_answer)
-
-        st.subheader("📊 Feedback:")
-        if is_correct:
-            st.success("✅ You're right!")
-            st.write(f"🎯 Match Score: {score:.2f}%")
-        else:
-            st.error("❌ Not quite correct.")
-            st.write(f"🎯 Match Score: {score:.2f}%")
-            st.info(f"📖 Correct answer might be:\n\n{best_answer}")
+    if st.button("🔎 Find Answer") and question:
+        answer = search_answer_from_pdf(question, pdf_text)
+        st.subheader("📘 Answer from PDF:")
+        st.info(answer)
 
     if st.button("👤 Detect Name from Resume"):
         name = extract_name_simple(pdf_text)
