@@ -61,4 +61,4 @@ else:
 # --- Reset Button ---
 if st.button("🔄 Restart Game"):
     reset_game()
-    st.experimental_rerun()
+    st.rerun()
