@@ -1,48 +1,35 @@
 import streamlit as st
 import chess
-import chess.svg
 
-# Title
-st.title("♟️ Dhyan CHESS")
+st.title("♟️ Dhyan Chess")
 
-# Initialize board in session state
-if 'board' not in st.session_state:
+# Initialize board
+if "board" not in st.session_state:
     st.session_state.board = chess.Board()
 
-# Function to render SVG in Streamlit
-def render_svg(svg_content):
-    """Embed raw SVG content using markdown (safe HTML injection)."""
-    st.markdown(f"<div style='text-align:center'>{svg_content}</div>", unsafe_allow_html=True)
+board = st.session_state.board
 
-# Draw the board
-svg_board = chess.svg.board(board=st.session_state.board)
-render_svg(svg_board)
+# Show board state
+st.text_area("Current Board (FEN)", value=board.fen(), height=50)
 
-# Input move
+# Show whose turn it is
+turn = "White" if board.turn == chess.WHITE else "Black"
+st.write(f"**{turn} to move**")
+
+# Move input
 move = st.text_input("Enter your move (e.g., e2e4):")
 
+# Handle move
 if st.button("Make Move"):
     try:
         chess_move = chess.Move.from_uci(move)
-        if chess_move in st.session_state.board.legal_moves:
-            st.session_state.board.push(chess_move)
+        if chess_move in board.legal_moves:
+            board.push(chess_move)
         else:
             st.error("Illegal move!")
     except:
         st.error("Invalid move format!")
 
-# Reset button
+# Reset game
 if st.button("Reset Game"):
     st.session_state.board = chess.Board()
-
-# Game status
-if st.session_state.board.is_checkmate():
-    st.success("Checkmate!")
-elif st.session_state.board.is_stalemate():
-    st.info("Stalemate!")
-elif st.session_state.board.is_insufficient_material():
-    st.info("Draw due to insufficient material!")
-elif st.session_state.board.is_check():
-    st.warning("Check!")
-
-st.write("FEN:", st.session_state.board.fen())
