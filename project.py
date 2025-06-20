@@ -10,7 +10,7 @@ if "board" not in st.session_state:
 board = st.session_state.board
 
 # Show board state
-st.text_area("Current Board (FEN)", value=board.fen(), height=50)
+st.text_area("Current Board (FEN)", value=board.fen(), height=80)
 
 # Show whose turn it is
 turn = "White" if board.turn == chess.WHITE else "Black"
