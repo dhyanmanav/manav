@@ -1,48 +1,92 @@
 import streamlit as st
-import chess
-import chess.svg
+import streamlit.components.v1 as components
 
-# Title
-st.title("♟️ Simple Streamlit Chess App (SVG embedded without cairosvg)")
+st.title("♟️ Drag-and-Drop Chess in Streamlit")
 
-# Initialize board in session state
-if 'board' not in st.session_state:
-    st.session_state.board = chess.Board()
+html_code = """
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Streamlit Chess</title>
+    <style>
+      #board { width: 400px; margin: auto; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" />
+  </head>
+  <body>
+    <div id="board"></div>
+    <p style="text-align:center;"><strong>Status:</strong> <span id="status"></span></p>
+    <script>
+      var board = null;
+      var game = new Chess();
 
-# Function to render SVG in Streamlit
-def render_svg(svg_content):
-    """Embed raw SVG content using markdown (safe HTML injection)."""
-    st.markdown(f"<div style='text-align:center'>{svg_content}</div>", unsafe_allow_html=True)
+      function onDragStart (source, piece, position, orientation) {
+        if (game.game_over() ||
+            (game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+            (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+          return false;
+        }
+      }
 
-# Draw the board
-svg_board = chess.svg.board(board=st.session_state.board)
-render_svg(svg_board)
+      function onDrop (source, target) {
+        var move = game.move({
+          from: source,
+          to: target,
+          promotion: 'q'
+        });
 
-# Input move
-move = st.text_input("Enter your move (e.g., e2e4):")
+        if (move === null) return 'snapback';
 
-if st.button("Make Move"):
-    try:
-        chess_move = chess.Move.from_uci(move)
-        if chess_move in st.session_state.board.legal_moves:
-            st.session_state.board.push(chess_move)
-        else:
-            st.error("Illegal move!")
-    except:
-        st.error("Invalid move format!")
+        updateStatus();
+      }
 
-# Reset button
-if st.button("Reset Game"):
-    st.session_state.board = chess.Board()
+      function onSnapEnd () {
+        board.position(game.fen());
+      }
 
-# Game status
-if st.session_state.board.is_checkmate():
-    st.success("Checkmate!")
-elif st.session_state.board.is_stalemate():
-    st.info("Stalemate!")
-elif st.session_state.board.is_insufficient_material():
-    st.info("Draw due to insufficient material!")
-elif st.session_state.board.is_check():
-    st.warning("Check!")
+      function updateStatus () {
+        var status = '';
 
-st.write("FEN:", st.session_state.board.fen())
+        var moveColor = 'White';
+        if (game.turn() === 'b') {
+          moveColor = 'Black';
+        }
+
+        if (game.in_checkmate()) {
+          status = 'Game over, ' + moveColor + ' is in checkmate.';
+        }
+
+        else if (game.in_draw()) {
+          status = 'Game over, drawn position.';
+        }
+
+        else {
+          status = moveColor + ' to move';
+
+          if (game.in_check()) {
+            status += ', ' + moveColor + ' is in check';
+          }
+        }
+
+        document.getElementById('status').innerHTML = status;
+      }
+
+      var config = {
+        draggable: true,
+        position: 'start',
+        onDragStart: onDragStart,
+        onDrop: onDrop,
+        onSnapEnd: onSnapEnd
+      };
+      board = Chessboard('board', config);
+      updateStatus();
+    </script>
+  </body>
+</html>
+"""
+
+# Display in Streamlit
+components.html(html_code, height=500)
