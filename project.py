@@ -3,16 +3,16 @@ import chess
 import chess.svg
 
 # Title
-st.title("♟️ Simple Streamlit Chess App (No cairosvg)")
+st.title("♟️ Simple Streamlit Chess App (SVG embedded without cairosvg)")
 
-# Initialize the board in session state
+# Initialize board in session state
 if 'board' not in st.session_state:
     st.session_state.board = chess.Board()
 
-# Display the board as SVG directly
+# Function to render SVG in Streamlit
 def render_svg(svg_content):
-    """Renders the given SVG string in Streamlit."""
-    st.image(svg_content.encode("utf-8"), format="svg")
+    """Embed raw SVG content using markdown (safe HTML injection)."""
+    st.markdown(f"<div style='text-align:center'>{svg_content}</div>", unsafe_allow_html=True)
 
 # Draw the board
 svg_board = chess.svg.board(board=st.session_state.board)
@@ -35,7 +35,7 @@ if st.button("Make Move"):
 if st.button("Reset Game"):
     st.session_state.board = chess.Board()
 
-# Display game status
+# Game status
 if st.session_state.board.is_checkmate():
     st.success("Checkmate!")
 elif st.session_state.board.is_stalemate():
