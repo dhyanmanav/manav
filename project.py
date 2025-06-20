@@ -14,10 +14,9 @@ html_code = """
         margin: auto;
       }
     </style>
-    <!-- Load chessboard.js and chess.js from reliable CDNs -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/1.0.0/chess.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chess.js@1.0.0/chess.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chessboardjs@1.0.0/dist/chessboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessboardjs@1.0.0/dist/chessboard.min.css" />
   </head>
   <body>
     <div id="board"></div>
@@ -38,7 +37,7 @@ html_code = """
         var move = game.move({
           from: source,
           to: target,
-          promotion: 'q' // auto-promote to queen
+          promotion: 'q'
         });
 
         if (move === null) return 'snapback';
@@ -67,20 +66,19 @@ html_code = """
         document.getElementById('status').innerText = status;
       }
 
-      var config = {
+      board = Chessboard('board', {
         draggable: true,
         position: 'start',
         onDragStart: onDragStart,
         onDrop: onDrop,
         onSnapEnd: onSnapEnd
-      };
+      });
 
-      board = Chessboard('board', config);
       updateStatus();
     </script>
   </body>
 </html>
 """
 
-# Render the component
-components.html(html_code, height=550)
+# Make sure height is sufficient (>= 550)
+components.html(html_code, height=600)
