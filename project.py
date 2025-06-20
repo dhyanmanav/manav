@@ -42,12 +42,12 @@ st.markdown(f"**{turn} to move**")
 
 # Move input
 move = st.text_input("Enter your move (e.g., e2e4):")
-
 if st.button("Make Move"):
     try:
         chess_move = chess.Move.from_uci(move)
         if chess_move in board.legal_moves:
             board.push(chess_move)
+            st.experimental_rerun()  # ✅ Force rerun to refresh board
         else:
             st.error("Illegal move!")
     except:
