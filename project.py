@@ -8,13 +8,16 @@ html_code = """
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Streamlit Chess</title>
     <style>
-      #board { width: 400px; margin: auto; }
+      #board {
+        width: 400px;
+        margin: auto;
+      }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" />
+    <!-- Load chessboard.js and chess.js from reliable CDNs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/1.0.0/chess.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard.min.css" />
   </head>
   <body>
     <div id="board"></div>
@@ -23,7 +26,7 @@ html_code = """
       var board = null;
       var game = new Chess();
 
-      function onDragStart (source, piece, position, orientation) {
+      function onDragStart (source, piece) {
         if (game.game_over() ||
             (game.turn() === 'w' && piece.search(/^b/) !== -1) ||
             (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
@@ -35,11 +38,10 @@ html_code = """
         var move = game.move({
           from: source,
           to: target,
-          promotion: 'q'
+          promotion: 'q' // auto-promote to queen
         });
 
         if (move === null) return 'snapback';
-
         updateStatus();
       }
 
@@ -49,29 +51,20 @@ html_code = """
 
       function updateStatus () {
         var status = '';
-
-        var moveColor = 'White';
-        if (game.turn() === 'b') {
-          moveColor = 'Black';
-        }
+        var moveColor = game.turn() === 'b' ? 'Black' : 'White';
 
         if (game.in_checkmate()) {
           status = 'Game over, ' + moveColor + ' is in checkmate.';
-        }
-
-        else if (game.in_draw()) {
+        } else if (game.in_draw()) {
           status = 'Game over, drawn position.';
-        }
-
-        else {
+        } else {
           status = moveColor + ' to move';
-
           if (game.in_check()) {
             status += ', ' + moveColor + ' is in check';
           }
         }
 
-        document.getElementById('status').innerHTML = status;
+        document.getElementById('status').innerText = status;
       }
 
       var config = {
@@ -81,6 +74,7 @@ html_code = """
         onDrop: onDrop,
         onSnapEnd: onSnapEnd
       };
+
       board = Chessboard('board', config);
       updateStatus();
     </script>
@@ -88,5 +82,5 @@ html_code = """
 </html>
 """
 
-# Display in Streamlit
-components.html(html_code, height=500)
+# Render the component
+components.html(html_code, height=550)
