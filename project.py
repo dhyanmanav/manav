@@ -1,58 +1,71 @@
 import streamlit as st
-import chess
-import chess.svg
-from PIL import Image
-from io import BytesIO
-import base64
+import random
+import time
 
-# Title
-st.title("♟️ Dhyan Chess")
+st.set_page_config(page_title="Dot Dodge Game", layout="centered")
+st.title("🎮 Dot Dodge - Avoid the Red Dots!By:Dhyan")
 
-# Initialize board in session
-if "board" not in st.session_state:
-    st.session_state.board = chess.Board()
+# Initialize game state
+if "player_pos" not in st.session_state:
+    st.session_state.player_pos = 5
+    st.session_state.dots = []
+    st.session_state.score = 0
+    st.session_state.game_over = False
 
-board = st.session_state.board
+# Game constants
+WIDTH = 10
+HEIGHT = 12
 
-# Helper to convert SVG to PNG using Pillow (via base64 trick)
-def render_board_svg(board):
-    svg = chess.svg.board(board=board)
-    # Convert SVG to base64 for img tag (Streamlit workaround)
-    b64 = base64.b64encode(svg.encode("utf-8")).decode("utf-8")
-    html = f'<img src="data:image/svg+xml;base64,{b64}"/>'
-    st.markdown(html, unsafe_allow_html=True)
+# Player move
+move = st.radio("Move", ["⬅️", "Stay", "➡️"], index=1, horizontal=True)
 
-# Display board
-render_board_svg(board)
+# Game area
+game_area = st.empty()
 
-# Show game status
-if board.is_checkmate():
-    st.success("Checkmate!")
-elif board.is_stalemate():
-    st.info("Stalemate!")
-elif board.is_insufficient_material():
-    st.info("Draw due to insufficient material!")
-elif board.is_check():
-    st.warning("Check!")
+# Main game loop
+if not st.session_state.game_over:
+    for step in range(1000):  # Long enough loop
+        # Move player
+        if move == "⬅️" and st.session_state.player_pos > 0:
+            st.session_state.player_pos -= 1
+        elif move == "➡️" and st.session_state.player_pos < WIDTH - 1:
+            st.session_state.player_pos += 1
 
-# Show FEN and turn
-st.text_area("Current Board (FEN)", value=board.fen(), height=80)
-turn = "White" if board.turn == chess.WHITE else "Black"
-st.markdown(f"**{turn} to move**")
+        # Spawn red dot
+        if random.random() < 0.2:
+            st.session_state.dots.append([random.randint(0, WIDTH - 1), 0])
 
-if st.button("Make Move"):
-    try:
-        move_clean = move.strip().lower()
-        chess_move = chess.Move.from_uci(move_clean)
-        if chess_move in board.legal_moves:
-            board.push(chess_move)
-            st.rerun()
-        else:
-            st.error("Illegal move!")
-    except:
-        st.error("Invalid move format!")
+        # Move red dots
+        for dot in st.session_state.dots:
+            dot[1] += 1
 
-# Reset game
-if st.button("Reset Game"):
-    st.session_state.board = chess.Board()
-    st.rerun()
+        # Check collision
+        for dot in st.session_state.dots:
+            if dot[0] == st.session_state.player_pos and dot[1] == HEIGHT - 1:
+                st.session_state.game_over = True
+                break
+
+        # Filter out dots out of bounds
+        st.session_state.dots = [dot for dot in st.session_state.dots if dot[1] < HEIGHT]
+
+        # Draw board
+        board = ""
+        for y in range(HEIGHT):
+            row = ""
+            for x in range(WIDTH):
+                char = "⬛"
+                if [x, y] in st.session_state.dots:
+                    char = "🔴"
+                elif y == HEIGHT - 1 and x == st.session_state.player_pos:
+                    char = "🔵"
+                row += char
+            board += row + "\n"
+        game_area.markdown(f"```\n{board}\n```")
+        st.session_state.score += 1
+        time.sleep(0.2)
+else:
+    st.error(f"💥 Game Over! Final Score: {st.session_state.score}")
+    if st.button("🔄 Restart"):
+        for key in ["player_pos", "dots", "score", "game_over"]:
+            del st.session_state[key]
+        st.rerun()
