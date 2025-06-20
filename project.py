@@ -1,24 +1,22 @@
 import streamlit as st
 import chess
 import chess.svg
-import base64
-from io import BytesIO
-import cairosvg
 
 # Title
-st.title("♟️ Simple Streamlit Chess App")
+st.title("♟️ Simple Streamlit Chess App (No cairosvg)")
 
 # Initialize the board in session state
 if 'board' not in st.session_state:
     st.session_state.board = chess.Board()
 
-# Display the board as an SVG converted to PNG
-def chessboard_to_image(board):
-    svg = chess.svg.board(board=board)
-    png_bytes = cairosvg.svg2png(bytestring=svg)
-    return png_bytes
+# Display the board as SVG directly
+def render_svg(svg_content):
+    """Renders the given SVG string in Streamlit."""
+    st.image(svg_content.encode("utf-8"), format="svg")
 
-st.image(chessboard_to_image(st.session_state.board))
+# Draw the board
+svg_board = chess.svg.board(board=st.session_state.board)
+render_svg(svg_board)
 
 # Input move
 move = st.text_input("Enter your move (e.g., e2e4):")
