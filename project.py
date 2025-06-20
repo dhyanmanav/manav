@@ -40,14 +40,13 @@ st.text_area("Current Board (FEN)", value=board.fen(), height=80)
 turn = "White" if board.turn == chess.WHITE else "Black"
 st.markdown(f"**{turn} to move**")
 
-# Move input
-move = st.text_input("Enter your move (e.g., e2e4):")
 if st.button("Make Move"):
     try:
-        chess_move = chess.Move.from_uci(move)
+        move_clean = move.strip().lower()
+        chess_move = chess.Move.from_uci(move_clean)
         if chess_move in board.legal_moves:
             board.push(chess_move)
-            st.experimental_rerun()  # ✅ Force rerun to refresh board
+            st.rerun()
         else:
             st.error("Illegal move!")
     except:
